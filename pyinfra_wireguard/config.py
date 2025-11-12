@@ -58,7 +58,7 @@ def full_config(privkey: str, address: str, peers: [tuple], listen_port="") -> s
 
 
 @deploy("Deploy WireGuard child")
-def deploy_wg_child(address: str, mother: str, m_pubkey: str, m_allowed_ips: str, m_endpoint: str, pass_entry=""):
+def deploy_wireguard_child(address: str, mother: str, m_pubkey: str, m_allowed_ips: str, m_endpoint: str, pass_entry=""):
     """Deploy wireguard on a child node, configured to connect to a mother node.
 
     :param address: the wireguard-internal IP of the child
@@ -90,7 +90,7 @@ def deploy_wg_child(address: str, mother: str, m_pubkey: str, m_allowed_ips: str
 
 
 @deploy("Deploy WireGuard mother")
-def deploy_wg_mother(address: str, listen_port: str, peers: [tuple], pass_entry=""):
+def deploy_wireguard_mother(address: str, listen_port: str, peers: [tuple], pass_entry=""):
     """Deploy a wireguard mother node
 
     :param address: the wireguard-internal IP of the mother
@@ -112,15 +112,16 @@ def deploy_wg_mother(address: str, listen_port: str, peers: [tuple], pass_entry=
         if pass_entry:
             store_public_key_in_pass(pubkey, pass_entry)
 
+    children_config = ""
     for child in peers:
         hostname, pubkey, allowed_ips, endpoint = child
-        child_config = peer_config(hostname, pubkey, allowed_ips, endpoint=endpoint)
-        peer_added = files.block(
-            path=CONFIG_PATH,
-            content=child_config,
-            backup=True,
-        )
-        reload_config |= peer_added.changed
+        children_config += peer_config(hostname, pubkey, allowed_ips, endpoint=endpoint)
+
+    peer_added = files.block(
+        path=CONFIG_PATH,
+        content=children_config,
+    )
+    reload_config |= peer_added.changed
 
     systemd.service(
         name="Enable wireguard",

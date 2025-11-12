@@ -1,1 +1,1 @@
-from .config import deploy_wg_child, deploy_wg_mother, CONFIG_PATH
+from .config import deploy_wireguard_child, deploy_wireguard_mother, CONFIG_PATH
