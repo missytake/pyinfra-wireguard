@@ -27,7 +27,7 @@ def peer_config(peer: str, pubkey: str, allowed_ips: str, endpoint="") -> str:
     :param endpoint: (optional) the Endpoint of the peer, must be publically reachable without wireguard
     :return: the config snippet of this specific peer
     """
-    peer_config = PEER_CONFIG % (peer, pubkey, allowed_ips, endpoint)
+    peer_config = PEER_CONFIG % (peer, pubkey, allowed_ips)
     if endpoint:
         peer_config += f"Endpoint = {endpoint}\nPersistentKeepalive = 25\n"
     return peer_config
