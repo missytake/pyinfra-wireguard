@@ -17,8 +17,8 @@ def generate_private_wg_key_locally() -> (str, str):
     :return The private key and the public key as a tuple
     """
     try:
-        privkey = subprocess.run(["wg", "genkey"], capture_output=True).stdout.decode('utf-8')
-        pubkey = subprocess.run(["wg", "pubkey", privkey], capture_output=True).stdout.decode('utf-8')
+        privkey = subprocess.run(["wg", "genkey"], capture_output=True).stdout.decode('utf-8').strip()
+        pubkey = subprocess.run(["wg", "pubkey", privkey], capture_output=True).stdout.decode('utf-8').strip()
     except FileNotFoundError:
         print("Can't run `wg genkey`, have you installed wireguard-tools on your local machine?")
         exit(1)

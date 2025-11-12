@@ -33,8 +33,7 @@ def peer_config(peer: str, pubkey: str, allowed_ips: str, endpoint="") -> str:
     return peer_config
 
 
-INTERFACE = """
-[Interface]
+INTERFACE = """[Interface]
 PrivateKey = %s
 Address = %s
 """
