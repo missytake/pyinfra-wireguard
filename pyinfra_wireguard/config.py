@@ -95,7 +95,7 @@ def deploy_wg_mother(address: str, listen_port: str, peers: [tuple], pass_entry=
 
     :param address: the wireguard-internal IP of the mother
     :param listen_port: the port on which it listens to children
-    :param peers: a list of tuples for each child, with its hostname, PublicKey, and AllowedIps
+    :param peers: a list of tuples for each child, with its hostname, PublicKey, AllowedIps, and Endpoint
     :param pass_entry: (optional) the pass entry the mother's public key should be saved to.
     """
     apt.packages(packages=["wireguard"])
@@ -113,8 +113,8 @@ def deploy_wg_mother(address: str, listen_port: str, peers: [tuple], pass_entry=
             store_public_key_in_pass(pubkey, pass_entry)
 
     for child in peers:
-        hostname, pubkey, allowed_ips = child
-        child_config = peer_config(hostname, pubkey, allowed_ips)
+        hostname, pubkey, allowed_ips, endpoint = child
+        child_config = peer_config(hostname, pubkey, allowed_ips, endpoint=endpoint)
         peer_added = files.block(
             path=CONFIG_PATH,
             content=child_config,
