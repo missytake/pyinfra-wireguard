@@ -58,7 +58,7 @@ def full_config(privkey: str, address: str, peers: [tuple], listen_port="") -> s
 
 
 @deploy("Deploy WireGuard child")
-def deploy_wireguard_child(address: str, mother: str, m_pubkey: str, m_allowed_ips: str, m_endpoint: str, pass_entry=""):
+def deploy_wireguard_child(address: str, mother: str, m_pubkey: str, m_allowed_ips: str, m_endpoint: str, pass_entry="", **pyinfra_args):
     """Deploy wireguard on a child node, configured to connect to a mother node.
 
     :param address: the wireguard-internal IP of the child
@@ -67,8 +67,9 @@ def deploy_wireguard_child(address: str, mother: str, m_pubkey: str, m_allowed_i
     :param m_allowed_ips: the AllowedIps of the mother
     :param m_endpoint: the Endpoint of the mother, must be publically reachable without wireguard
     :param pass_entry: (optional) the pass entry the child's public key should be saved to.
+    :param pyinfra_args: pyinfra arguments like _sudo=True
     """
-    apt.packages(packages=["wireguard"])
+    apt.packages(packages=["wireguard"], **pyinfra_args)
 
     if not host.get_fact(FindInFile, CONFIG_PATH, "PrivateKey = "):
         privkey, pubkey = generate_private_wg_key_locally()
@@ -77,6 +78,7 @@ def deploy_wireguard_child(address: str, mother: str, m_pubkey: str, m_allowed_i
             src=StringIO(full_config(privkey, address, peers)),
             dest=CONFIG_PATH,
             mode="600",
+            **pyinfra_args,
         )
         if pass_entry:
             store_public_key_in_pass(pubkey, pass_entry)
@@ -86,19 +88,21 @@ def deploy_wireguard_child(address: str, mother: str, m_pubkey: str, m_allowed_i
         service="wg-quick@wg0",
         enabled=True,
         running=True,
+        **pyinfra_args,
     )
 
 
 @deploy("Deploy WireGuard mother")
-def deploy_wireguard_mother(address: str, listen_port: str, peers: [tuple], pass_entry=""):
+def deploy_wireguard_mother(address: str, listen_port: str, peers: [tuple], pass_entry="", **pyinfra_args):
     """Deploy a wireguard mother node
 
     :param address: the wireguard-internal IP of the mother
     :param listen_port: the port on which it listens to children
     :param peers: a list of tuples for each child, with its hostname, PublicKey, AllowedIps, and Endpoint
     :param pass_entry: (optional) the pass entry the mother's public key should be saved to.
+    :param pyinfra_args: pyinfra arguments like _sudo=True
     """
-    apt.packages(packages=["wireguard"])
+    apt.packages(packages=["wireguard"], **pyinfra_args)
 
     reload_config = False
     if not host.get_fact(FindInFile, CONFIG_PATH, "PrivateKey = "):
@@ -107,6 +111,7 @@ def deploy_wireguard_mother(address: str, listen_port: str, peers: [tuple], pass
             src=StringIO(full_config(privkey, address, [], listen_port=listen_port)),
             dest=CONFIG_PATH,
             mode="600",
+            **pyinfra_args,
         )
         reload_config |= interface.changed
         if pass_entry:
@@ -120,6 +125,7 @@ def deploy_wireguard_mother(address: str, listen_port: str, peers: [tuple], pass
     peer_added = files.block(
         path=CONFIG_PATH,
         content=children_config,
+        **pyinfra_args,
     )
     reload_config |= peer_added.changed
 
@@ -129,4 +135,5 @@ def deploy_wireguard_mother(address: str, listen_port: str, peers: [tuple], pass
         enabled=True,
         running=True,
         restarted=reload_config,
+        **pyinfra_args,
     )
