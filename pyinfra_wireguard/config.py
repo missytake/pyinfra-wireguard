@@ -82,6 +82,8 @@ def deploy_wireguard_child(address: str, mother: str, m_pubkey: str, m_allowed_i
         )
         if pass_entry:
             store_public_key_in_pass(pubkey, pass_entry)
+        else:
+            print("Generated child's public key: " + pubkey)
 
     systemd.service(
         name="Enable wireguard",
@@ -116,6 +118,8 @@ def deploy_wireguard_mother(address: str, listen_port: str, peers: [tuple], pass
         reload_config |= interface.changed
         if pass_entry:
             store_public_key_in_pass(pubkey, pass_entry)
+        else:
+            print("Generated mother's public key: " + pubkey)
 
     children_config = ""
     for child in peers:
