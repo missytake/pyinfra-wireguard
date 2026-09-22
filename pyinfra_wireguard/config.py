@@ -1,4 +1,5 @@
 from io import StringIO
+from typing import List, Tuple
 
 from pyinfra import host
 from pyinfra.api.deploy import deploy
@@ -53,7 +54,7 @@ def deploy_wireguard_child(address: str, mother: str, m_pubkey: str, m_allowed_i
 
 
 @deploy("Deploy WireGuard mother")
-def deploy_wireguard_mother(address: str, peers: [tuple], listen_port: str = "51902", pass_entry="", **pyinfra_args):
+def deploy_wireguard_mother(address: str, peers: List[Tuple], listen_port: str = "51902", pass_entry="", **pyinfra_args):
     """Deploy a wireguard mother node
 
     :param address: the wireguard-internal IP of the mother
@@ -65,7 +66,7 @@ def deploy_wireguard_mother(address: str, peers: [tuple], listen_port: str = "51
     update_config(address, peers, listen_port=listen_port, pass_entry=pass_entry, **pyinfra_args)
 
 
-def update_config(address: str, peers: [tuple], listen_port: str = "", pass_entry="", **pyinfra_args):
+def update_config(address: str, peers: List[Tuple], listen_port: str = "", pass_entry="", **pyinfra_args):
     """Generate and upload config for a wireguard node
 
     :param address: the wireguard-internal IP of the mother
