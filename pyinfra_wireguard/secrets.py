@@ -1,4 +1,4 @@
-from io import StringIO
+from typing import Tuple
 from subprocess import Popen, run, PIPE, STDOUT
 
 
@@ -12,7 +12,7 @@ def get_pass(filename: str) -> str:
     return r.stdout.decode('utf-8')
 
 
-def generate_private_wg_key_locally() -> (str, str):
+def generate_private_wg_key_locally() -> Tuple[str, str]:
     """Generate a wireguard keypair locally
 
     :return The private key and the public key as a tuple

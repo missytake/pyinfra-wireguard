@@ -1,4 +1,5 @@
 from io import StringIO
+from typing import List, Tuple
 
 from pyinfra import host
 from pyinfra.api.deploy import deploy
@@ -17,8 +18,10 @@ PublicKey = %s
 AllowedIps = %s
 """
 
+INTERFACE = "[Interface]\nPrivateKey = "
 
-def peer_config(peer: str, pubkey: str, allowed_ips: str, endpoint="") -> str:
+
+def generate_peer_config(peer: str, pubkey: str, allowed_ips: str, endpoint="") -> str:
     """Return config for a peer to add to the wg0.conf file of the wireguard node.
 
     :param peer: the hostname of the peer
@@ -33,32 +36,8 @@ def peer_config(peer: str, pubkey: str, allowed_ips: str, endpoint="") -> str:
     return peer_config
 
 
-INTERFACE = """[Interface]
-PrivateKey = %s
-Address = %s
-"""
-
-
-def full_config(privkey: str, address: str, peers: [tuple], listen_port="") -> str:
-    """Generate the config file for a wireguard node.
-
-    :param privkey: the wireguard Private Key of the child
-    :param address: the wireguard-internal IP address of the child
-    :param peers: a list with a tuple for each peer, containing hostname, PublicKey, AllowedIps, and Endpoint
-    :param listen_port: (optional) the port on which the node listens for peers who want to connect
-    :return: the config to be uploaded
-    """
-    config = INTERFACE % (privkey, address)
-    if listen_port:
-        config += f"ListenPort = {listen_port}\n"
-    for peer in peers:
-        peer, pubkey, allowed_ips, endpoint = peer
-        config += peer_config(peer, pubkey, allowed_ips, endpoint)
-    return config
-
-
 @deploy("Deploy WireGuard child")
-def deploy_wireguard_child(address: str, mother: str, m_pubkey: str, m_allowed_ips: str, m_endpoint: str, pass_entry="", **pyinfra_args):
+def deploy_wireguard_child(address: str, mother: str, m_pubkey: str, m_allowed_ips: str, m_endpoint: str, listen_port="", pass_entry="", **pyinfra_args):
     """Deploy wireguard on a child node, configured to connect to a mother node.
 
     :param address: the wireguard-internal IP of the child
@@ -66,42 +45,34 @@ def deploy_wireguard_child(address: str, mother: str, m_pubkey: str, m_allowed_i
     :param m_pubkey: the PublicKey of the mother
     :param m_allowed_ips: the AllowedIps of the mother
     :param m_endpoint: the Endpoint of the mother, must be publically reachable without wireguard
+    :param listen_port: the port to listen on, so others can reach the node's endpoint
     :param pass_entry: (optional) the pass entry the child's public key should be saved to.
     :param pyinfra_args: pyinfra arguments like _sudo=True
     """
-    apt.packages(packages=["wireguard"], **pyinfra_args)
-
-    if not host.get_fact(FindInFile, CONFIG_PATH, "PrivateKey = "):
-        privkey, pubkey = generate_private_wg_key_locally()
-        peers = [(mother, m_pubkey, m_allowed_ips, m_endpoint)]
-        files.put(
-            src=StringIO(full_config(privkey, address, peers)),
-            dest=CONFIG_PATH,
-            mode="600",
-            **pyinfra_args,
-        )
-        if pass_entry:
-            store_public_key_in_pass(pubkey, pass_entry)
-        else:
-            print("Generated child's public key: " + pubkey)
-
-    systemd.service(
-        name="Enable wireguard",
-        service="wg-quick@wg0",
-        enabled=True,
-        running=True,
-        **pyinfra_args,
-    )
+    mother_as_peer = [(mother, m_pubkey, m_allowed_ips, m_endpoint)]
+    _update_config(address, mother_as_peer, listen_port=listen_port, pass_entry=pass_entry, **pyinfra_args)
 
 
 @deploy("Deploy WireGuard mother")
-def deploy_wireguard_mother(address: str, listen_port: str, peers: [tuple], pass_entry="", **pyinfra_args):
+def deploy_wireguard_mother(address: str, peers: List[Tuple], listen_port: str = "51902", pass_entry="", **pyinfra_args):
     """Deploy a wireguard mother node
 
     :param address: the wireguard-internal IP of the mother
-    :param listen_port: the port on which it listens to children
     :param peers: a list of tuples for each child, with its hostname, PublicKey, AllowedIps, and Endpoint
+    :param listen_port: the port on which it listens to children
     :param pass_entry: (optional) the pass entry the mother's public key should be saved to.
+    :param pyinfra_args: pyinfra arguments like _sudo=True
+    """
+    _update_config(address, peers, listen_port=listen_port, pass_entry=pass_entry, **pyinfra_args)
+
+
+def _update_config(address: str, peers: List[Tuple], listen_port: str = "", pass_entry="", **pyinfra_args):
+    """Generate and upload config for a wireguard node
+
+    :param address: the wireguard-internal IP of the mother
+    :param peers: a list of tuples for each child, with its hostname, PublicKey, AllowedIps, and Endpoint
+    :param listen_port: the port on which it listens to children
+    :param pass_entry: (optional) the pass entry where the public key should be saved to.
     :param pyinfra_args: pyinfra arguments like _sudo=True
     """
     apt.packages(packages=["wireguard"], **pyinfra_args)
@@ -109,30 +80,45 @@ def deploy_wireguard_mother(address: str, listen_port: str, peers: [tuple], pass
     reload_config = False
     if not host.get_fact(FindInFile, CONFIG_PATH, "PrivateKey = "):
         privkey, pubkey = generate_private_wg_key_locally()
-        interface = files.put(
-            src=StringIO(full_config(privkey, address, [], listen_port=listen_port)),
+        interface_op = files.put(
+            name="Deploy initial config with generated private key",
+            src=StringIO(INTERFACE + privkey),
             dest=CONFIG_PATH,
             mode="600",
             **pyinfra_args,
         )
-        reload_config |= interface.changed
+        reload_config |= interface_op.changed
         if pass_entry:
             store_public_key_in_pass(pubkey, pass_entry)
         else:
-            print("Generated mother's public key: " + pubkey)
+            print("Generated wireguard public key: " + pubkey)
 
-    children_config = ""
-    for child in peers:
-        hostname, pubkey, allowed_ips, endpoint = child
-        children_config += peer_config(hostname, pubkey, allowed_ips, endpoint=endpoint)
+    address_op = files.line(
+        name="Set wireguard Address",
+        path=CONFIG_PATH,
+        line="^(#|)Address = (.*)",
+        replace=f"Address = {address}",
+        extended_regex=True,
+    )
+    listen_port_op = files.line(
+        name="Set wireguard ListenPort",
+        path=CONFIG_PATH,
+        line="^(#|)ListenPort = (.*)",
+        replace=f"ListenPort = {listen_port}",
+        present=bool(listen_port),
+        extended_regex=True,
+    )
 
+    peers_config = ""
+    for hostname, pubkey, allowed_ips, endpoint in peers:
+        peers_config += generate_peer_config(hostname, pubkey, allowed_ips, endpoint=endpoint)
     peer_added = files.block(
         path=CONFIG_PATH,
-        content=children_config,
+        content=peers_config,
         **pyinfra_args,
     )
-    reload_config |= peer_added.changed
 
+    reload_config |= address_op.changed or listen_port_op.changed or peer_added.changed
     systemd.service(
         name="Enable wireguard",
         service="wg-quick@wg0",
