@@ -53,12 +53,12 @@ def deploy_wireguard_child(address: str, mother: str, m_pubkey: str, m_allowed_i
 
 
 @deploy("Deploy WireGuard mother")
-def deploy_wireguard_mother(address: str, listen_port: str, peers: [tuple], pass_entry="", **pyinfra_args):
+def deploy_wireguard_mother(address: str, peers: [tuple], listen_port: str = "51902", pass_entry="", **pyinfra_args):
     """Deploy a wireguard mother node
 
     :param address: the wireguard-internal IP of the mother
-    :param listen_port: the port on which it listens to children
     :param peers: a list of tuples for each child, with its hostname, PublicKey, AllowedIps, and Endpoint
+    :param listen_port: the port on which it listens to children
     :param pass_entry: (optional) the pass entry the mother's public key should be saved to.
     :param pyinfra_args: pyinfra arguments like _sudo=True
     """
